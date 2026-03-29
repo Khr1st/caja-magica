@@ -1,4 +1,4 @@
-# Caja Mágica — KYNEX Ventures
+# Caja Mágica 
 
 Tesorería personal conversacional de Kent Díaz / KYNEX Ventures.
 
