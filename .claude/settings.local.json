@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(rm -f C:/Users/khris/caja-magica/data/movimientos.json C:/Users/khris/caja-magica/data/*.xlsx)"
+    ]
+  }
+}
