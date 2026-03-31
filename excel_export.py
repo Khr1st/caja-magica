@@ -1,4 +1,4 @@
-"""Generador de Excel con identidad visual Kent / KYNEX Ventures."""
+"""Generador de Excel — Caja Mágica."""
 
 from datetime import datetime
 from pathlib import Path
@@ -9,7 +9,7 @@ from openpyxl.utils import get_column_letter
 
 BASE_DIR = Path(__file__).parent
 
-# --- Paleta Kent ---
+# --- Paleta ---
 COLOR_HEADER_BG = "1A4731"
 COLOR_HEADER_FONT = "FFFFFF"
 COLOR_ROW_ALT = "F0F7F0"
@@ -133,7 +133,7 @@ def _sheet_registro(wb, movimientos, mes):
 
     # Subtítulo
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=cols)
-    sub_cell = ws.cell(row=2, column=1, value=f"KYNEX Ventures · Kent Díaz · Exportado: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    sub_cell = ws.cell(row=2, column=1, value=f"Caja Mágica · Exportado: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     sub_cell.font = _subtitle_font()
     sub_cell.alignment = Alignment(horizontal="center")
 
@@ -298,11 +298,11 @@ def _sheet_supuestos(wb):
 
     params = [
         ("Tasa COP/USD", 4200),
-        ("Precio hora consultoría (USD)", 25),
-        ("Horas facturables/semana (máx real: 10h)", 10),
+        ("Precio hora servicios (USD)", 25),
+        ("Horas facturables/semana", 10),
         ("Caja mínima COP (umbral de alerta)", 800000),
-        ("% reinversión primeros ingresos (regla 50/50)", 50),
-        ("Objetivo ingreso mensual USD (meta Oklahoma)", 2000),
+        ("% reinversión primeros ingresos", 50),
+        ("Objetivo ingreso mensual USD", 2000),
     ]
 
     for i, (label, value) in enumerate(params):
@@ -328,3 +328,8 @@ def generar_excel(movimientos: list, mes: str) -> str:
     path = out_dir / f"CajaMagica_{mes}.xlsx"
     wb.save(str(path))
     return str(path)
+
+
+def sincronizar(movimientos: list, resumen: dict, mes: str) -> str:
+    """Regenera el Excel en disco de forma idempotente. Retorna la ruta absoluta."""
+    return generar_excel(movimientos, mes)

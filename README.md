@@ -1,15 +1,15 @@
-# Caja Mágica 
+# Caja Mágica
 
-Tesorería personal conversacional de Kent Díaz / KYNEX Ventures.
+Tu tesorería personal inteligente.
 
-Registro de ingresos, egresos, ahorros y proyecciones mediante lenguaje natural. Clasificación automática por regex NLP, exportación a Excel con identidad visual, y PWA instalable.
+Registra ingresos, egresos, ahorros y proyecciones con lenguaje natural. Clasificación automática, exportación Excel, semáforo de caja y PWA instalable.
 
 ## Stack
 
 - **Backend:** Python 3.11+ · FastAPI · Uvicorn
 - **Frontend:** HTML + CSS + JS vanilla (single file)
 - **Persistencia:** JSON local
-- **Excel:** openpyxl con paleta Kent
+- **Excel:** openpyxl
 - **Deploy:** Railway.app compatible
 
 ## Ejecutar local

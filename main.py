@@ -7,11 +7,11 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from clasificador import clasificar
-from excel_export import generar_excel
+import excel_export
 
 app = FastAPI(title="Caja Mágica", version="1.0.0")
 
@@ -45,61 +45,13 @@ def guardar_movimientos(lista: list):
         json.dump(lista, f, indent=2, ensure_ascii=False)
 
 
-def mes_actual():
+def mes_actual() -> str:
     return datetime.now().strftime("%Y-%m")
 
 
-@app.get("/")
-async def root():
-    return FileResponse(BASE_DIR / "static" / "index.html")
-
-
-@app.post("/api/movimiento")
-async def crear_movimiento(entrada: EntradaTexto):
-    resultado = clasificar(entrada.texto)
-    if resultado.error:
-        return {"ok": False, "mensaje": resultado.error}
-
-    movimiento = {
-        "id": str(uuid.uuid4()),
-        "timestamp": datetime.now().isoformat(),
-        "mes": mes_actual(),
-        "texto_original": entrada.texto,
-        "tipo": resultado.tipo,
-        "categoria": resultado.categoria,
-        "descripcion": resultado.descripcion,
-        "monto_cop": resultado.monto_cop,
-        "monto_original": resultado.monto_original,
-        "moneda": resultado.moneda,
-        "es_proyeccion": resultado.es_proyeccion,
-        "confianza": resultado.confianza,
-    }
-
-    movimientos = cargar_movimientos()
-    movimientos.append(movimiento)
-    guardar_movimientos(movimientos)
-
-    return {"ok": True, "movimiento": movimiento, "mensaje": resultado.mensaje_respuesta}
-
-
-@app.get("/api/movimientos")
-async def listar_movimientos(mes: str = None, tipo: str = None):
-    if mes is None:
-        mes = mes_actual()
-    movimientos = cargar_movimientos()
-    filtrados = [m for m in movimientos if m.get("mes") == mes]
-    if tipo:
-        filtrados = [m for m in filtrados if m.get("tipo") == tipo]
-    filtrados.sort(key=lambda m: m.get("timestamp", ""), reverse=True)
-    return filtrados
-
-
-@app.get("/api/resumen")
-async def resumen(mes: str = None):
+def calcular_resumen(movimientos: list) -> dict:
+    """Calcula el resumen financiero de una lista de movimientos del mismo mes."""
     global TASA_COP_USD, CAJA_MINIMA_COP
-    if mes is None:
-        mes = mes_actual()
-    movimientos = [m for m in cargar_movimientos() if m.get("mes") == mes]
 
     ingresos_cop = sum(m["monto_cop"] for m in movimientos if m["tipo"] == "ingreso")
     egresos_cop = sum(m["monto_cop"] for m in movimientos if m["tipo"] in ("egreso", "ahorro"))
@@ -122,19 +74,17 @@ async def resumen(mes: str = None):
         "verde": "Caja saludable — vas bien",
     }
 
+    runway_meses = 99
     if egresos_cop > 0:
         gasto_diario = egresos_cop / 30
         runway_meses = round(neto / gasto_diario, 1) if gasto_diario > 0 else 99
-    else:
-        runway_meses = 99
 
-    por_categoria = {}
+    por_categoria: dict = {}
     for m in movimientos:
         cat = m.get("categoria", "otro")
         por_categoria[cat] = por_categoria.get(cat, 0) + m["monto_cop"]
 
     return {
-        "mes": mes,
         "ingresos_cop": ingresos_cop,
         "egresos_cop": egresos_cop,
         "ahorros_cop": ahorros_cop,
@@ -149,14 +99,82 @@ async def resumen(mes: str = None):
     }
 
 
+@app.get("/")
+async def root():
+    return FileResponse(BASE_DIR / "static" / "index.html")
+
+
+@app.post("/api/movimiento")
+async def crear_movimiento(entrada: EntradaTexto):
+    resultado = clasificar(entrada.texto)
+    if resultado.error:
+        return {"ok": False, "mensaje": resultado.error}
+
+    mes = mes_actual()
+    movimiento = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().isoformat(),
+        "mes": mes,
+        "texto_original": entrada.texto,
+        "tipo": resultado.tipo,
+        "categoria": resultado.categoria,
+        "descripcion": resultado.descripcion,
+        "monto_cop": resultado.monto_cop,
+        "monto_original": resultado.monto_original,
+        "moneda": resultado.moneda,
+        "es_proyeccion": resultado.es_proyeccion,
+        "confianza": resultado.confianza,
+    }
+
+    todos = cargar_movimientos()
+    todos.append(movimiento)
+    guardar_movimientos(todos)
+
+    # Sync Excel automático
+    movimientos_mes = [m for m in todos if m.get("mes") == mes]
+    resumen = calcular_resumen(movimientos_mes)
+    excel_export.sincronizar(movimientos_mes, resumen, mes)
+
+    return {"ok": True, "movimiento": movimiento, "mensaje": resultado.mensaje_respuesta}
+
+
+@app.get("/api/movimientos")
+async def listar_movimientos(mes: str = None, tipo: str = None):
+    if mes is None:
+        mes = mes_actual()
+    movimientos = cargar_movimientos()
+    filtrados = [m for m in movimientos if m.get("mes") == mes]
+    if tipo:
+        filtrados = [m for m in filtrados if m.get("tipo") == tipo]
+    filtrados.sort(key=lambda m: m.get("timestamp", ""), reverse=True)
+    return filtrados
+
+
+@app.get("/api/resumen")
+async def resumen(mes: str = None):
+    if mes is None:
+        mes = mes_actual()
+    movimientos = [m for m in cargar_movimientos() if m.get("mes") == mes]
+    data = calcular_resumen(movimientos)
+    data["mes"] = mes
+    return data
+
+
 @app.delete("/api/movimiento/{mov_id}")
 async def eliminar_movimiento(mov_id: str):
-    movimientos = cargar_movimientos()
-    original_len = len(movimientos)
-    movimientos = [m for m in movimientos if m.get("id") != mov_id]
-    if len(movimientos) == original_len:
+    todos = cargar_movimientos()
+    original_len = len(todos)
+    todos = [m for m in todos if m.get("id") != mov_id]
+    if len(todos) == original_len:
         raise HTTPException(status_code=404, detail="Movimiento no encontrado")
-    guardar_movimientos(movimientos)
+    guardar_movimientos(todos)
+
+    # Sync Excel automático
+    mes = mes_actual()
+    movimientos_mes = [m for m in todos if m.get("mes") == mes]
+    resumen = calcular_resumen(movimientos_mes)
+    excel_export.sincronizar(movimientos_mes, resumen, mes)
+
     return {"ok": True, "mensaje": "Movimiento eliminado"}
 
 
@@ -164,12 +182,17 @@ async def eliminar_movimiento(mov_id: str):
 async def exportar(mes: str = None):
     if mes is None:
         mes = mes_actual()
-    movimientos = [m for m in cargar_movimientos() if m.get("mes") == mes]
-    path = generar_excel(movimientos, mes)
+    ruta = BASE_DIR / "data" / f"CajaMagica_{mes}.xlsx"
+
+    if not ruta.exists():
+        movimientos = [m for m in cargar_movimientos() if m.get("mes") == mes]
+        resumen = calcular_resumen(movimientos)
+        ruta = excel_export.sincronizar(movimientos, resumen, mes)
+
     return FileResponse(
-        path,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        path=str(ruta),
         filename=f"CajaMagica_{mes}.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="CajaMagica_{mes}.xlsx"'},
     )
 

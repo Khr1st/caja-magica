@@ -4,6 +4,6 @@ __pycache__/
 .env
 .DS_Store
 data/movimientos.json
-*.xlsx
+data/*.xlsx
 venv/
 .venv/
